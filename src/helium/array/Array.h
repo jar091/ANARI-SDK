@@ -6,6 +6,7 @@
 #include "../BaseObject.h"
 #include "../helium_math.h"
 // std
+#include <algorithm>
 #include <sstream>
 
 namespace helium {
@@ -103,6 +104,7 @@ struct Array : public BaseArray
   T valueAtLinear(float in) const; // 'in' must be clamped to [0, 1]
   template <typename T>
   T valueAtClosest(float in) const; // 'in' must be clamped to [0, 1]
+  static Interpolant clampedInterpolant(float in, size_t size);
 
   virtual void *map() override;
   virtual void unmap() override;
@@ -196,7 +198,7 @@ template <typename T>
 inline T Array::valueAtLinear(float in) const
 {
   const T *data = dataAs<T>();
-  const auto i = getInterpolant(in, totalSize(), false);
+  const auto i = clampedInterpolant(in, totalSize());
   return linalg::lerp(data[i.lower], data[i.upper], i.frac);
 }
 
@@ -204,8 +206,19 @@ template <typename T>
 inline T Array::valueAtClosest(float in) const
 {
   const T *data = dataAs<T>();
-  const auto i = getInterpolant(in, totalSize(), false);
+  const auto i = clampedInterpolant(in, totalSize());
   return i.frac <= 0.5f ? data[i.lower] : data[i.upper];
+}
+
+inline Interpolant Array::clampedInterpolant(float in, size_t size)
+{
+  // At in == 1 getInterpolant() returns upper == size (with frac == 0), which
+  // must not be read: keep both indices inside the array.
+  auto i = getInterpolant(in, size, false);
+  const int32_t last = int32_t(size) - 1;
+  i.lower = std::clamp(i.lower, 0, std::max(last, 0));
+  i.upper = std::clamp(i.upper, 0, std::max(last, 0));
+  return i;
 }
 
 template <typename T>
